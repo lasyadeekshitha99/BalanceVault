@@ -1,0 +1,39 @@
+{
+  "name": "balancevault-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "BalanceVault — money movement with a ledger you can prove",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "db:generate": "npm run db:generate --workspace=@balancevault/api",
+    "db:migrate": "npm run db:migrate --workspace=@balancevault/api",
+    "db:seed": "npm run db:seed --workspace=@balancevault/api",
+    "bootstrap:admin": "npm run bootstrap:admin --workspace=@balancevault/api",
+    "dev": "npm run dev --workspaces --parallel",
+    "dev:api": "npm run dev --workspace=@balancevault/api",
+    "dev:web": "npm run dev --workspace=@balancevault/web",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspace=@balancevault/api",
+    "test:e2e": "npm run test:e2e --workspace=@balancevault/api",
+    "git:init": "node scripts/git-ops.js commit",
+    "git:push": "node scripts/git-ops.js push"
+  },
+  "keywords": [
+    "fintech",
+    "banking",
+    "rbac",
+    "audit-trail",
+    "ledger",
+    "postgresql",
+    "prisma",
+    "redis"
+  ],
+  "author": "BalanceVault Team",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "isomorphic-git": "^1.44.12"
+  }
+}

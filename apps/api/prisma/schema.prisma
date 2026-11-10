@@ -1,0 +1,189 @@
+// Prisma Schema for BalanceVault
+// Financial account management, RBAC, tamper-evident ledger, and auditability
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  OPERATOR
+  ACCOUNT_HOLDER
+}
+
+enum UserStatus {
+  PENDING_ONBOARDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum AccountType {
+  CHECKING
+  SAVINGS
+  BUSINESS
+  OPERATIONAL_RESERVE
+}
+
+enum AccountStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  FROZEN
+  CLOSED
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  TRANSFER
+  INITIAL_GRANT
+}
+
+enum TransactionStatus {
+  PENDING
+  SETTLED
+  FAILED
+  REVERSED
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+enum OnboardingStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id                    String                 @id @default(uuid())
+  email                 String                 @unique
+  passwordHash          String
+  fullName              String
+  role                  Role                   @default(ACCOUNT_HOLDER)
+  status                UserStatus             @default(PENDING_ONBOARDING)
+  phone                 String?
+  accounts              Account[]
+  onboardingApplication OnboardingApplication?
+  auditLogs             AuditLog[]             @relation("ActorAuditLogs")
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@index([email])
+  @@index([role])
+  @@index([status])
+}
+
+model Account {
+  id            String        @id @default(uuid())
+  accountNumber String        @unique
+  accountType   AccountType   @default(CHECKING)
+  balance       Decimal       @default(0.00)
+  currency      String        @default("USD")
+  status        AccountStatus @default(ACTIVE)
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ledgerEntries LedgerEntry[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([accountNumber])
+}
+
+model Transaction {
+  id                   String            @id @default(uuid())
+  reference            String            @unique
+  type                 TransactionType
+  amount               Decimal
+  currency             String            @default("USD")
+  status               TransactionStatus @default(SETTLED)
+  description          String?
+  sourceAccountId      String?
+  destinationAccountId String?
+  entries              LedgerEntry[]
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  @@index([reference])
+}
+
+model LedgerEntry {
+  id                String          @id @default(uuid())
+  transactionId     String
+  transaction       Transaction     @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  accountId         String
+  account           Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  direction         LedgerDirection
+  amount            Decimal
+  balanceAfter      Decimal
+  sequenceNumber    Int
+  previousEntryHash String
+  entryHash         String          // SHA-256(sequence + txId + accountId + direction + amount + balanceAfter + prevHash)
+  timestamp         DateTime        @default(now())
+
+  @@index([accountId])
+  @@index([sequenceNumber])
+}
+
+model OnboardingApplication {
+  id             String           @id @default(uuid())
+  userId         String           @unique
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status         OnboardingStatus @default(DRAFT)
+  documentType   String
+  documentNumber String
+  annualIncome   Decimal?
+  sourceOfFunds  String?
+  legalAddress   String?
+  reviewNotes    String?
+  reviewedBy     String?
+  submittedAt    DateTime?
+  reviewedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([status])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actorEmail String?
+  actorRole  String?
+  action     String   // e.g. AUTH.BOOTSTRAP, AUTH.LOGIN, ADMIN.APPROVE_USER, LEDGER.TRANSFER
+  entityType String   // e.g. USER, ONBOARDING, ACCOUNT, LEDGER
+  entityId   String?
+  ipAddress  String?
+  userAgent  String?
+  metadata   String?  // JSON serialized contextual audit payload
+  status     String   @default("SUCCESS") // SUCCESS | FAILURE
+  timestamp  DateTime @default(now())
+  actor      User?    @relation("ActorAuditLogs", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([action])
+  @@index([entityType])
+  @@index([timestamp])
+}
+
+model SystemBootstrap {
+  id                    String    @id @default("singleton")
+  isBootstrapped        Boolean   @default(false)
+  bootstrappedAt        DateTime?
+  bootstrapOperatorRole String?
+  initialAdminUserId    String?
+  bootstrapChecksum     String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
